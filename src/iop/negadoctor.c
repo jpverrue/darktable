@@ -544,12 +544,11 @@ static void Dmin_picker_callback(GtkColorButton *widget, dt_iop_module_t *self)
   p->Dmin[1] = c.green;
   p->Dmin[2] = c.blue;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->Dmin_R, p->Dmin[0] * 100.0f); // warning: GUI is in %
   dt_bauhaus_slider_set(g->Dmin_G, p->Dmin[1] * 100.0f); // warning: GUI is in %
   dt_bauhaus_slider_set(g->Dmin_B, p->Dmin[2] * 100.0f); // warning: GUI is in %
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   Dmin_picker_update(self);
   dt_iop_color_picker_reset(self, TRUE);
@@ -595,12 +594,11 @@ static void WB_low_picker_callback(GtkColorButton *widget, dt_iop_module_t *self
   float RGB_min = v_minf(RGB);
   for(size_t k = 0; k < 3; k++) p->wb_low[k] = RGB[k] / RGB_min;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->wb_low_R, p->wb_low[0]);
   dt_bauhaus_slider_set(g->wb_low_G, p->wb_low[1]);
   dt_bauhaus_slider_set(g->wb_low_B, p->wb_low[2]);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   WB_low_picker_update(self);
   dt_iop_color_picker_reset(self, TRUE);
@@ -647,12 +645,11 @@ static void WB_high_picker_callback(GtkColorButton *widget, dt_iop_module_t *sel
   float RGB_min = v_minf(RGB);
   for(size_t k = 0; k < 3; k++) p->wb_high[k] = RGB[k] / RGB_min;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->wb_high_R, p->wb_high[0]);
   dt_bauhaus_slider_set(g->wb_high_G, p->wb_high[1]);
   dt_bauhaus_slider_set(g->wb_high_B, p->wb_high[2]);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   WB_high_picker_update(self);
   dt_iop_color_picker_reset(self, TRUE);
@@ -671,12 +668,11 @@ static void apply_auto_Dmin(dt_iop_module_t *self)
 
   for(int k = 0; k < 4; k++) p->Dmin[k] = self->picked_color[k];
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->Dmin_R, p->Dmin[0] * 100.0f); // warning: GUI is in %
   dt_bauhaus_slider_set(g->Dmin_G, p->Dmin[1] * 100.0f); // warning: GUI is in %
   dt_bauhaus_slider_set(g->Dmin_B, p->Dmin[2] * 100.0f); // warning: GUI is in %
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   Dmin_picker_update(self);
   dt_control_queue_redraw_widget(self->widget);
@@ -699,10 +695,9 @@ static void apply_auto_Dmax(dt_iop_module_t *self)
   // Take the max(RGB) for safety. Big values unclip whites
   p->D_max = v_maxf(RGB);
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->D_max, p->D_max);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_control_queue_redraw_widget(self->widget);
   dt_dev_add_history_item(darktable.develop, self, TRUE);
@@ -722,10 +717,9 @@ static void apply_auto_offset(dt_iop_module_t *self)
   // Take the min(RGB) for safety. Negative values unclip blacks
   p->offset = v_minf(RGB);
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->offset, p->offset); // warning: GUI is in %
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_control_queue_redraw_widget(self->widget);
   dt_dev_add_history_item(darktable.develop, self, TRUE);
@@ -746,12 +740,11 @@ static void apply_auto_WB_low(dt_iop_module_t *self)
   const float RGB_v_min = v_minf(RGB_min); // warning: can be negative
   for(int c = 0; c < 3; c++) p->wb_low[c] =  RGB_v_min / RGB_min[c];
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->wb_low_R, p->wb_low[0]);
   dt_bauhaus_slider_set(g->wb_low_G, p->wb_low[1]);
   dt_bauhaus_slider_set(g->wb_low_B, p->wb_low[2]);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   WB_low_picker_update(self);
   dt_control_queue_redraw_widget(self->widget);
@@ -773,12 +766,11 @@ static void apply_auto_WB_high(dt_iop_module_t *self)
   const float RGB_v_min = v_minf(RGB_min); // warning : must be positive
   for(int c = 0; c < 3; c++) p->wb_high[c] = RGB_min[c] / RGB_v_min;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->wb_high_R, p->wb_high[0]);
   dt_bauhaus_slider_set(g->wb_high_G, p->wb_high[1]);
   dt_bauhaus_slider_set(g->wb_high_B, p->wb_high[2]);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   WB_high_picker_update(self);
   dt_control_queue_redraw_widget(self->widget);
@@ -803,10 +795,9 @@ static void apply_auto_black(dt_iop_module_t *self)
   }
   p->black = v_maxf(RGB);
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->black, p->black * 100.0f);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_control_queue_redraw_widget(self->widget);
   dt_dev_add_history_item(darktable.develop, self, TRUE);
@@ -830,34 +821,33 @@ static void apply_auto_exposure(dt_iop_module_t *self)
   }
   p->exposure = v_minf(RGB);
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->exposure, log2f(p->exposure));
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_control_queue_redraw_widget(self->widget);
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
 
 
-void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece)
+void color_picker_apply(dt_iop_module_t *self, GtkWidget *picker, dt_dev_pixelpipe_iop_t *piece)
 {
   if(self->dt->gui->reset) return;
   dt_iop_negadoctor_gui_data_t *g = (dt_iop_negadoctor_gui_data_t *)self->gui_data;
 
-  if     (self->picker->colorpick == g->Dmin_sampler)
+  if     (picker == g->Dmin_sampler)
     apply_auto_Dmin(self);
-  else if(self->picker->colorpick == g->WB_high_sampler)
+  else if(picker == g->WB_high_sampler)
     apply_auto_WB_high(self);
-  else if(self->picker->colorpick == g->offset)
+  else if(picker == g->offset)
     apply_auto_offset(self);
-  else if(self->picker->colorpick == g->D_max)
+  else if(picker == g->D_max)
     apply_auto_Dmax(self);
-  else if(self->picker->colorpick == g->WB_low_sampler)
+  else if(picker == g->WB_low_sampler)
     apply_auto_WB_low(self);
-  else if(self->picker->colorpick == g->exposure)
+  else if(picker == g->exposure)
     apply_auto_exposure(self);
-  else if(self->picker->colorpick == g->black)
+  else if(picker == g->black)
     apply_auto_black(self);
   else
     fprintf(stderr, "[negadoctor] unknown color picker\n");
@@ -1062,7 +1052,7 @@ void gui_init(dt_iop_module_t *self)
   dt_bauhaus_combobox_add(g->film_stock, _("color"));
   gtk_box_pack_start(GTK_BOX(self->widget), GTK_WIDGET(g->film_stock), TRUE, TRUE, 0);
   g_signal_connect(G_OBJECT(g->film_stock), "value-changed", G_CALLBACK(film_stock_callback), self);
-  gtk_widget_set_tooltip_text(g->film_stock, _("toogle on or off the color controls"));
+  gtk_widget_set_tooltip_text(g->film_stock, _("toggle on or off the color controls"));
 
   g->notebook = GTK_NOTEBOOK(gtk_notebook_new());
   GtkWidget *page1 = GTK_WIDGET(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
@@ -1344,14 +1334,7 @@ void gui_cleanup(dt_iop_module_t *self)
 }
 
 
-void gui_focus(struct dt_iop_module_t *self, gboolean in)
-{
-  if(!in) dt_iop_color_picker_reset(self, TRUE);
-}
-
-
 void gui_reset(dt_iop_module_t *self)
 {
   dt_iop_color_picker_reset(self, TRUE);
 }
-

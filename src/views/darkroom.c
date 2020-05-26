@@ -219,8 +219,7 @@ void expose(
   if(dev->gui_synch && !dev->image_loading)
   {
     // synch module guis from gtk thread:
-    const int reset = darktable.gui->reset;
-    darktable.gui->reset = 1;
+    ++darktable.gui->reset;
     GList *modules = dev->iop;
     while(modules)
     {
@@ -228,7 +227,7 @@ void expose(
       dt_iop_gui_update(module);
       modules = g_list_next(modules);
     }
-    darktable.gui->reset = reset;
+    --darktable.gui->reset;
     dev->gui_synch = 0;
   }
 
@@ -420,12 +419,34 @@ void expose(
     PangoRectangle ink;
     PangoLayout *layout;
     PangoFontDescription *desc = pango_font_description_copy_static(darktable.bauhaus->pango_font_desc);
-    const float fontsize = DT_PIXEL_APPLY_DPI(14);
+    float fontsize;
+    gchar *load_txt;
+
+    if(dev->image_invalid_cnt)
+    {
+      fontsize = DT_PIXEL_APPLY_DPI(20);
+      load_txt = dt_util_dstrcat(NULL, "%s `%s' %s\n\n%s\n%s",
+          "darktable could not load image",
+          dev->image_storage.filename,
+          ", switch to lighttable now.",
+          "Please check image (use exiv2 or exiftool) for corrupted data. If the image",
+          "seems to be intact concider to open an issue at https://github.com/darktable-org/darktable." );
+      if(dev->image_invalid_cnt > 400)
+      {
+        dev->image_invalid_cnt = 0;
+        dt_view_manager_switch(darktable.view_manager, "lighttable");
+      }
+    }
+    else
+    {
+      fontsize = DT_PIXEL_APPLY_DPI(14);
+      load_txt = dt_util_dstrcat(NULL, "%s %s ...", _("loading image"), dev->image_storage.filename);
+    }
+
     pango_font_description_set_absolute_size(desc, fontsize * PANGO_SCALE);
     pango_font_description_set_weight(desc, PANGO_WEIGHT_BOLD);
     layout = pango_cairo_create_layout(cr);
     pango_layout_set_font_description(layout, desc);
-    gchar *load_txt = dt_util_dstrcat(NULL, "%s %s ...", _("loading image"), dev->image_storage.filename);
     pango_layout_set_text(layout, load_txt, -1);
     pango_layout_get_pixel_extents(layout, &ink, NULL);
     const float xc = width / 2.0, yc = height * 0.85 - DT_PIXEL_APPLY_DPI(10), wd = ink.width * .5f;
@@ -824,8 +845,7 @@ static void dt_dev_change_image(dt_develop_t *dev, const uint32_t imgid)
   dt_dev_reload_image(dev, imgid);
 
   // make sure no signals propagate here:
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
 
   const guint nb_iop = g_list_length(dev->iop);
   dt_dev_pixelpipe_cleanup_nodes(dev->pipe);
@@ -946,7 +966,7 @@ static void dt_dev_change_image(dt_develop_t *dev, const uint32_t imgid)
      are blocked due to implementation of dt_iop_request_focus so we do it now
      A double history entry is not generated.
   */
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   /* Now we can request focus again and write a safe plugins/darkroom/active */
   if(active_plugin)
@@ -1028,10 +1048,17 @@ static void dt_dev_jump_image(dt_develop_t *dev, int diff, gboolean by_key)
     new_offset = sqlite3_column_int(stmt, 0);
     new_id = sqlite3_column_int(stmt, 1);
   }
+  else
+  {
+    // if we are here, that means that the current is not anymore in the list
+    // in this case, let's use the current offset image
+    new_id = dt_ui_thumbtable(darktable.gui->ui)->offset_imgid;
+    new_offset = dt_ui_thumbtable(darktable.gui->ui)->offset;
+  }
   g_free(query);
   sqlite3_finalize(stmt);
 
-  if(new_id < 0) return;
+  if(new_id < 0 || new_id == imgid) return;
 
   // if id seems valid, we change the image and move filmstrip
   dt_dev_change_image(dev, new_id);
@@ -1982,8 +2009,7 @@ static gboolean _toggle_mask_visibility_callback(GtkAccelGroup *accel_group, GOb
   {
     dt_iop_gui_blend_data_t *bd = (dt_iop_gui_blend_data_t *)mod->blend_data;
 
-    const int reset = darktable.gui->reset;
-    darktable.gui->reset = 1;
+    ++darktable.gui->reset;
 
     dt_iop_color_picker_reset(mod, TRUE);
 
@@ -2003,7 +2029,7 @@ static gboolean _toggle_mask_visibility_callback(GtkAccelGroup *accel_group, GOb
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bd->masks_shapes[n]), FALSE);
     }
 
-    darktable.gui->reset = reset;
+    --darktable.gui->reset;
 
     return TRUE;
   }
@@ -2705,8 +2731,7 @@ void enter(dt_view_t *self)
    * add IOP modules to plugin list
    */
   // avoid triggering of events before plugin is ready:
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   char option[1024];
   GList *modules = g_list_last(dev->iop);
   while(modules)
@@ -2741,7 +2766,7 @@ void enter(dt_view_t *self)
     modules = g_list_previous(modules);
   }
   // make signals work again:
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   /* signal that darktable.develop is initialized and ready to be used */
   dt_control_signal_raise(darktable.signals, DT_SIGNAL_DEVELOP_INITIALIZE);

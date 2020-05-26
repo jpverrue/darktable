@@ -285,7 +285,7 @@ static void saturation_callback(GtkWidget *slider, gpointer user_data)
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
 
-void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece)
+void color_picker_apply(dt_iop_module_t *self, GtkWidget *picker, dt_dev_pixelpipe_iop_t *piece)
 {
   dt_iop_colorize_gui_data_t *g = (dt_iop_colorize_gui_data_t *)self->gui_data;
   dt_iop_colorize_params_t *p = (dt_iop_colorize_params_t *)self->params;
@@ -307,12 +307,11 @@ void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *pi
   p->hue        = H;
   p->saturation = S;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->gslider1, p->hue);
   dt_bauhaus_slider_set(g->gslider2, p->saturation);
   update_saturation_slider_end_color(g->gslider2, p->hue);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }

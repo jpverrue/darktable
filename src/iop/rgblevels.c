@@ -169,12 +169,11 @@ static void _develop_ui_pipe_finished_callback(gpointer instance, dt_iop_module_
 
     dt_pthread_mutex_unlock(&g->lock);
 
-    const int reset = darktable.gui->reset;
-    darktable.gui->reset = 1;
+    ++darktable.gui->reset;
 
     gui_update(self);
 
-    darktable.gui->reset = reset;
+    --darktable.gui->reset;
   }
   else
   {
@@ -772,7 +771,7 @@ static void _color_picker_callback(GtkWidget *button, dt_iop_module_t *self)
   _turn_select_region_off(self);
 }
 
-void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece)
+void color_picker_apply(dt_iop_module_t *self, GtkWidget *picker, dt_dev_pixelpipe_iop_t *piece)
 {
   dt_iop_rgblevels_gui_data_t *c = (dt_iop_rgblevels_gui_data_t *)self->gui_data;
   dt_iop_rgblevels_params_t *p = (dt_iop_rgblevels_params_t *)self->params;
@@ -796,7 +795,7 @@ void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *pi
 
     c->last_picked_color = mean_picked_color;
 
-    if(self->picker->colorpick == c->blackpick)
+    if(picker == c->blackpick)
     {
       if(mean_picked_color > p->levels[channel][1])
       {
@@ -807,7 +806,7 @@ void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *pi
         p->levels[channel][0] = mean_picked_color;
       }
     }
-    else if(self->picker->colorpick == c->greypick)
+    else if(picker == c->greypick)
     {
       if(mean_picked_color < p->levels[channel][0] || mean_picked_color > p->levels[channel][2])
       {
@@ -818,7 +817,7 @@ void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *pi
         p->levels[channel][1] = mean_picked_color;
       }
     }
-    else if(self->picker->colorpick == c->whitepick)
+    else if(picker == c->whitepick)
     {
       if(mean_picked_color < p->levels[channel][1])
       {
@@ -894,7 +893,7 @@ void gui_update(dt_iop_module_t *self)
 
 void gui_focus(struct dt_iop_module_t *self, gboolean in)
 {
-  if(!in) _turn_selregion_picker_off(self);
+  if(!in) _turn_select_region_off(self);
 }
 
 void gui_reset(struct dt_iop_module_t *self)

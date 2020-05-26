@@ -377,9 +377,14 @@ static void view_popup_menu_onSearchFilmroll(GtkWidget *menuitem, gpointer userd
     if(new_path)
     {
       gchar *old = NULL;
-      query = dt_util_dstrcat(query, "SELECT id, folder FROM main.film_rolls WHERE folder LIKE '%s%%'", tree_path);
+
+      gchar *q_tree_path = NULL;
+      q_tree_path = dt_util_dstrcat(q_tree_path, "%s%%", tree_path);
+      query = "SELECT id, folder FROM main.film_rolls WHERE folder LIKE ?1";
       DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), query, -1, &stmt, NULL);
-      g_free(query);
+      DT_DEBUG_SQLITE3_BIND_TEXT(stmt, 1, q_tree_path, -1, SQLITE_TRANSIENT);
+      g_free(q_tree_path);
+      q_tree_path = NULL;
       query = NULL;
 
       while(sqlite3_step(stmt) == SQLITE_ROW)
@@ -1879,8 +1884,7 @@ static void _lib_collect_gui_update(dt_lib_module_t *self)
   // we check if something as change since last call
   if(d->view_rule != -1) return;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   const int _a = dt_conf_get_int("plugins/lighttable/collect/num_rules") - 1;
   const int active = CLAMP(_a, 0, (MAX_RULES - 1));
   d->nb_rules = active + 1;
@@ -1939,7 +1943,7 @@ static void _lib_collect_gui_update(dt_lib_module_t *self)
 
   // update list of proposals
   update_view(d->rule + d->active_rule);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 }
 
 void gui_reset(dt_lib_module_t *self)
@@ -1997,8 +2001,32 @@ static void combo_changed(GtkComboBox *combo, dt_lib_collect_rule_t *d)
     gtk_widget_set_tooltip_text(d->text, _("type your query, use `%' as wildcard"));
   }
 
+  gboolean order_request = FALSE;
+  uint32_t order = 0;
+  if(c->active_rule == 0)
+  {
+    const int prev_property = dt_conf_get_int("plugins/lighttable/collect/item0");
+
+    if(prev_property != DT_COLLECTION_PROP_TAG && property == DT_COLLECTION_PROP_TAG)
+    {
+      // save global order
+      const uint32_t sort = dt_collection_get_sort_field(darktable.collection);
+      const gboolean descending = dt_collection_get_sort_descending(darktable.collection);
+      dt_conf_set_int("plugins/lighttable/collect/order", sort | (descending ? DT_COLLECTION_ORDER_FLAG : 0));
+    }
+    else if(prev_property == DT_COLLECTION_PROP_TAG && property != DT_COLLECTION_PROP_TAG)
+    {
+      // restore global order
+      order = dt_conf_get_int("plugins/lighttable/collect/order");
+      order_request = TRUE;
+      dt_collection_set_tag_id((dt_collection_t *)darktable.collection, 0);
+    }
+  }
+
   set_properties(d);
   c->view_rule = -1;
+  if(order_request)
+    dt_control_signal_raise(darktable.signals, DT_SIGNAL_IMAGES_ORDER_CHANGE, order);
   dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_NEW_QUERY, NULL);
 }
 
@@ -2014,6 +2042,8 @@ static void row_activated_with_event(GtkTreeView *view, GtkTreePath *path, GtkTr
   if(!gtk_tree_model_get_iter(model, &iter, path1)) return;
 
   gchar *text;
+  gboolean order_request = FALSE;
+  int order;
 
   const int active = d->active_rule;
   d->rule[active].typing = FALSE;
@@ -2052,22 +2082,48 @@ static void row_activated_with_event(GtkTreeView *view, GtkTreePath *path, GtkTr
       g_free(text2);
       text = n_text;
     }
-    else if(item == DT_COLLECTION_PROP_TAG && gtk_tree_model_iter_has_child(model, &iter))
+    else if(item == DT_COLLECTION_PROP_TAG)
     {
-      /* if a tag has children, ctrl-clicking on a parent node should display all images under this hierarchy. */
-      if(event->state & GDK_CONTROL_MASK)
+      if(gtk_tree_model_iter_has_child(model, &iter))
       {
-        gchar *n_text = g_strconcat(text, "|%", NULL);
-        g_free(text);
-        text = n_text;
+        /* if a tag has children, ctrl-clicking on a parent node should display all images under this hierarchy. */
+        if(event->state & GDK_CONTROL_MASK)
+        {
+          gchar *n_text = g_strconcat(text, "|%", NULL);
+          g_free(text);
+          text = n_text;
+        }
+        /* if a tag has children, shift-clicking on a parent node should display all images in and under this
+         * hierarchy. */
+        else if(event->state & GDK_SHIFT_MASK)
+        {
+          gchar *n_text = g_strconcat(text, "%", NULL);
+          g_free(text);
+          text = n_text;
+        }
       }
-      /* if a tag has children, shift-clicking on a parent node should display all images in and under this
-       * hierarchy. */
-      else if(event->state & GDK_SHIFT_MASK)
+      else if(active == 0) // first filter is tag and the row is a leave
       {
-        gchar *n_text = g_strconcat(text, "%", NULL);
-        g_free(text);
-        text = n_text;
+        uint32_t sort = DT_COLLECTION_SORT_NONE;
+        gboolean descending = FALSE;
+        const uint32_t tagid = dt_tag_get_tag_id_by_name(text);
+        if(tagid)
+        {
+          order_request = TRUE;
+          if(dt_tag_get_tag_order_by_id(tagid, &sort, &descending))
+          {
+            order = sort | (descending  ? DT_COLLECTION_ORDER_FLAG : 0);
+          }
+          else
+          {
+            // the tag order is not set yet - default order (filename)
+            order = DT_COLLECTION_SORT_FILENAME;
+            dt_tag_set_tag_order_by_id(tagid, order & ~DT_COLLECTION_ORDER_FLAG,
+                                       order & DT_COLLECTION_ORDER_FLAG);
+          }
+          dt_collection_set_tag_id((dt_collection_t *)darktable.collection, tagid);
+        }
+        else dt_collection_set_tag_id((dt_collection_t *)darktable.collection, 0);
       }
     }
   }
@@ -2094,6 +2150,8 @@ static void row_activated_with_event(GtkTreeView *view, GtkTreePath *path, GtkTr
 
   dt_control_signal_block_by_func(darktable.signals, G_CALLBACK(collection_updated),
                                   darktable.view_manager->proxy.module_collect.module);
+  if(order_request)
+    dt_control_signal_raise(darktable.signals, DT_SIGNAL_IMAGES_ORDER_CHANGE, order);
   dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_NEW_QUERY, NULL);
   dt_control_signal_unblock_by_func(darktable.signals, G_CALLBACK(collection_updated),
                                     darktable.view_manager->proxy.module_collect.module);
@@ -2488,6 +2546,7 @@ void gui_init(dt_lib_module_t *self)
     gtk_entry_set_width_chars(GTK_ENTRY(w), 0);
 
     w = dtgtk_button_new(dtgtk_cairo_paint_presets, CPF_STYLE_FLAT | CPF_DO_NOT_USE_BORDER, NULL);
+    gtk_widget_set_name(GTK_WIDGET(w), "control-button");
     d->rule[i].button = w;
     gtk_widget_set_events(w, GDK_BUTTON_PRESS_MASK);
     g_signal_connect(G_OBJECT(w), "button-press-event", G_CALLBACK(popup_button_callback), d->rule + i);
@@ -2544,6 +2603,12 @@ void gui_init(dt_lib_module_t *self)
   darktable.view_manager->proxy.module_collect.update = _lib_collect_gui_update;
 
   _lib_collect_gui_update(self);
+
+  if(_combo_get_active_collection(GTK_COMBO_BOX(d->rule[0].combo)) == DT_COLLECTION_PROP_TAG)
+  {
+    gchar *tag = dt_conf_get_string("plugins/lighttable/collect/string0");
+    dt_collection_set_tag_id((dt_collection_t *)darktable.collection, dt_tag_get_tag_id_by_name(tag));
+  }
 
   // force redraw collection images because of late update of the table memory.darktable_iop_names
   dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_RELOAD, NULL);

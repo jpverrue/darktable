@@ -399,12 +399,11 @@ static void _develop_ui_pipe_finished_callback(gpointer instance, gpointer user_
 
     dt_pthread_mutex_unlock(&g->lock);
 
-    const int reset = darktable.gui->reset;
-    darktable.gui->reset = 1;
+    ++darktable.gui->reset;
 
     gui_update(self);
 
-    darktable.gui->reset = reset;
+    --darktable.gui->reset;
   }
   else
   {
@@ -433,12 +432,11 @@ static void _signal_profile_user_changed(gpointer instance, uint8_t profile_type
 
       if(g)
       {
-        const int reset = darktable.gui->reset;
-        darktable.gui->reset = 1;
+        ++darktable.gui->reset;
 
         dt_bauhaus_slider_set_default(g->sl_middle_grey, def_middle_grey);
 
-        darktable.gui->reset = reset;
+        --darktable.gui->reset;
       }
     }
   }
@@ -591,7 +589,7 @@ void cleanup_global(dt_iop_module_so_t *module)
   module->data = NULL;
 }
 
-void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece)
+void color_picker_apply(dt_iop_module_t *self, GtkWidget *picker, dt_dev_pixelpipe_iop_t *piece)
 {
   if(self->dt->gui->reset) return;
   dt_iop_basicadj_params_t *p = (dt_iop_basicadj_params_t *)self->params;
@@ -606,13 +604,9 @@ void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *pi
                                                                        work_profile->nonlinearlut) * 100.f)
                                   : dt_camera_rgb_luminance(self->picked_color);
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->sl_middle_grey, p->middle_grey);
-  darktable.gui->reset = reset;
-
-  // avoid recursion
-  self->picker->skip_apply = TRUE;
+  --darktable.gui->reset;
 
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
@@ -726,7 +720,7 @@ void cleanup(dt_iop_module_t *module)
 
 void gui_focus(struct dt_iop_module_t *self, gboolean in)
 {
-  if(!in) _turn_selregion_picker_off(self);
+  if(!in) _turn_select_region_off(self);
 }
 
 void change_image(struct dt_iop_module_t *self)

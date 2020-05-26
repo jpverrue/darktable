@@ -1299,7 +1299,7 @@ void dt_exif_apply_default_metadata(dt_image_t *img)
         {
           setting = dt_util_dstrcat(NULL, "ui_last/import_last_%s", name);
           str = dt_conf_get_string(setting);
-          if(str != NULL && str[0] != '\0') dt_metadata_set(img->id, dt_metadata_get_key(i), str, FALSE, FALSE);
+          if(str != NULL && str[0] != '\0') dt_metadata_set(img->id, dt_metadata_get_key(i), str, FALSE);
           g_free(str);
           g_free(setting);
         }
@@ -1311,7 +1311,7 @@ void dt_exif_apply_default_metadata(dt_image_t *img)
     {
       GList *imgs = NULL;
       imgs = g_list_append(imgs, GINT_TO_POINTER(img->id));
-      dt_tag_attach_string_list(str, imgs, FALSE, FALSE);
+      dt_tag_attach_string_list(str, imgs, FALSE);
       g_list_free(imgs);
     }
     g_free(str);
@@ -2017,8 +2017,11 @@ static void _exif_import_tags(dt_image_t *img, Exiv2::XmpData::iterator &pos)
   DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db), "INSERT INTO data.tags (id, name) VALUES (NULL, ?1)",
                               -1, &stmt_ins_tags, NULL);
   DT_DEBUG_SQLITE3_PREPARE_V2(dt_database_get(darktable.db),
-                              "INSERT INTO main.tagged_images (tagid, imgid) VALUES (?1, ?2)", -1,
-                              &stmt_ins_tagged, NULL);
+                              "INSERT INTO main.tagged_images (tagid, imgid, position)"
+                              "  VALUES (?1, ?2,"
+                              "    (SELECT (IFNULL(MAX(position),0) & 0xFFFFFFFF00000000) + (1 << 32)"
+                              "      FROM main.tagged_images))",
+                               -1, &stmt_ins_tagged, NULL);
   for(int i = 0; i < cnt; i++)
   {
     char tagbuf[1024];

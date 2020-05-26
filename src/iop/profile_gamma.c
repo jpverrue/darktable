@@ -391,10 +391,9 @@ static void apply_auto_grey(dt_iop_module_t *self)
   float grey = fmax(fmax(self->picked_color[0], self->picked_color[1]), self->picked_color[2]);
   p->grey_point = 100.f * grey;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->grey_point, p->grey_point);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
@@ -414,10 +413,9 @@ static void apply_auto_black(dt_iop_module_t *self)
 
   p->shadows_range = EVmin;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->shadows_range, p->shadows_range);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
@@ -440,10 +438,9 @@ static void apply_auto_dynamic_range(dt_iop_module_t *self)
 
   p->dynamic_range = EVmax - EVmin;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->dynamic_range, p->dynamic_range);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
@@ -488,11 +485,10 @@ static void security_threshold_callback(GtkWidget *slider, gpointer user_data)
   p->dynamic_range = EVmax - EVmin;
   p->shadows_range = EVmin;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set_soft(g->dynamic_range, p->dynamic_range);
   dt_bauhaus_slider_set_soft(g->shadows_range, p->shadows_range);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
@@ -521,12 +517,11 @@ static void apply_autotune(dt_iop_module_t *self)
   p->shadows_range = EVmin;
   p->dynamic_range = EVmax - EVmin;
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   dt_bauhaus_slider_set(g->grey_point, p->grey_point);
   dt_bauhaus_slider_set(g->shadows_range, p->shadows_range);
   dt_bauhaus_slider_set(g->dynamic_range, p->dynamic_range);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
@@ -596,24 +591,19 @@ static void mode_callback(GtkWidget *combo, gpointer user_data)
   dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
 
-void color_picker_apply(struct dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece)
+void color_picker_apply(dt_iop_module_t *self, GtkWidget *picker, dt_dev_pixelpipe_iop_t *piece)
 {
   dt_iop_profilegamma_gui_data_t *g = (dt_iop_profilegamma_gui_data_t *)self->gui_data;
-  if     (self->picker->colorpick == g->grey_point)
+  if     (picker == g->grey_point)
     apply_auto_grey(self);
-  else if(self->picker->colorpick == g->shadows_range)
+  else if(picker == g->shadows_range)
     apply_auto_black(self);
-  else if(self->picker->colorpick == g->dynamic_range)
+  else if(picker == g->dynamic_range)
     apply_auto_dynamic_range(self);
-  else if(self->picker->colorpick == g->auto_button)
+  else if(picker == g->auto_button)
     apply_autotune(self);
   else
     fprintf(stderr, "[profile_gamma] unknown color picker\n");
-}
-
-void gui_focus(struct dt_iop_module_t *self, gboolean in)
-{
-  if(!in) dt_iop_color_picker_reset(self, TRUE);
 }
 
 void commit_params(dt_iop_module_t *self, dt_iop_params_t *p1, dt_dev_pixelpipe_t *pipe,

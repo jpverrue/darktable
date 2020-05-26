@@ -865,10 +865,14 @@ static gboolean _event_draw(GtkWidget *widget, cairo_t *cr, gpointer user_data)
 
 static gboolean _event_leave_notify(GtkWidget *widget, GdkEventCrossing *event, gpointer user_data)
 {
-  // if the leaving cause is the hide of the widget, no mouseover change
-  if(!gtk_widget_is_visible(widget)) return FALSE;
-
   dt_thumbtable_t *table = (dt_thumbtable_t *)user_data;
+  // if the leaving cause is the hide of the widget, no mouseover change
+  if(!gtk_widget_is_visible(widget))
+  {
+    table->mouse_inside = FALSE;
+    return FALSE;
+  }
+
   // if we leave thumbtable in favour of an inferior (a thumbnail) it's not a real leave !
   if(event->detail == GDK_NOTIFY_INFERIOR) return FALSE;
 
@@ -1176,6 +1180,20 @@ static void _dt_collection_changed_callback(gpointer instance, dt_collection_cha
      *                        | S | S | S | S | N |
      * S = same imgid as offset ; N = next imgid as offset
      **/
+
+    // in filmstrip mode, let's first ensure the offset is the right one. Otherwise we move to it
+    int old_offset = -1;
+    if(table->mode == DT_THUMBTABLE_MODE_FILMSTRIP && g_slist_length(darktable.view_manager->active_images) > 0)
+    {
+      const int tmpoff = GPOINTER_TO_INT(g_slist_nth_data(darktable.view_manager->active_images, 0));
+      if(tmpoff != table->offset_imgid)
+      {
+        old_offset = table->offset_imgid;
+        table->offset = _thumb_get_rowid(tmpoff);
+        table->offset_imgid = tmpoff;
+        dt_thumbtable_full_redraw(table, TRUE);
+      }
+    }
     int newid = table->offset_imgid;
     if(newid <= 0 && table->offset > 0) newid = _thumb_get_imgid(table->offset);
 
@@ -1246,6 +1264,23 @@ static void _dt_collection_changed_callback(gpointer instance, dt_collection_cha
     dt_thumbtable_full_redraw(table, TRUE);
 
     if(offset_changed) dt_view_lighttable_change_offset(darktable.view_manager, FALSE, newid);
+    else
+    {
+      // if we are in culling or preview mode, ensure to refresh active images
+      dt_view_lighttable_culling_preview_refresh(darktable.view_manager);
+    }
+
+    // if needed, we restore back the position of the filmstrip
+    if(old_offset > 0 && old_offset != table->offset)
+    {
+      const int tmpoff = _thumb_get_rowid(old_offset);
+      if(tmpoff > 0)
+      {
+        table->offset = tmpoff;
+        table->offset_imgid = old_offset;
+        dt_thumbtable_full_redraw(table, TRUE);
+      }
+    }
 
     dt_control_queue_redraw_center();
   }
@@ -1562,14 +1597,7 @@ void dt_thumbtable_full_redraw(dt_thumbtable_t *table, gboolean force)
   if(_compute_sizes(table, force))
   {
     // we update the scrollbars
-    gboolean bars = (gtk_widget_get_visible(darktable.gui->scrollbars.vscrollbar)
-                     || gtk_widget_get_visible(darktable.gui->scrollbars.hscrollbar));
-    if(bars != _thumbtable_update_scrollbars(table) && table->mode != DT_THUMBTABLE_MODE_FILMSTRIP)
-    {
-      // scrollabrs visibility changed, no need to go further, as this function will
-      // be triggered another time by widget resizing
-      return;
-    }
+    _thumbtable_update_scrollbars(table);
 
     const double start = dt_get_wtime();
     table->dragging = FALSE;
@@ -1633,6 +1661,8 @@ void dt_thumbtable_full_redraw(dt_thumbtable_t *table, gboolean force)
       if(tl)
       {
         dt_thumbnail_t *thumb = (dt_thumbnail_t *)tl->data;
+        GtkStyleContext *context = gtk_widget_get_style_context(thumb->w_main);
+        gtk_style_context_remove_class(context, "dt_last_active");
         thumb->rowid = nrow; // this may have changed
         // we set new position/size if needed
         if(thumb->x != posx || thumb->y != posy)
@@ -2142,6 +2172,64 @@ gboolean dt_thumbtable_ensure_imgid_visibility(dt_thumbtable_t *table, const int
     return _filemanager_ensure_rowid_visibility(table, _thumb_get_rowid(imgid));
   else if(table->mode == DT_THUMBTABLE_MODE_ZOOM)
     return _zoomable_ensure_rowid_visibility(table, _thumb_get_rowid(imgid));
+
+  return FALSE;
+}
+
+static gboolean _filemanager_check_rowid_visibility(dt_thumbtable_t *table, const int rowid)
+{
+  if(rowid < 1) return FALSE;
+  if(!table->list || g_list_length(table->list) == 0) return FALSE;
+  // get first and last fully visible thumbnails
+  dt_thumbnail_t *first = (dt_thumbnail_t *)g_list_first(table->list)->data;
+  const int pos = MIN(g_list_length(table->list) - 1, table->thumbs_per_row * (table->rows - 1) - 1);
+  dt_thumbnail_t *last = (dt_thumbnail_t *)g_list_nth_data(table->list, pos);
+
+  if(first->rowid <= rowid && last->rowid >= rowid) return TRUE;
+  return FALSE;
+}
+static gboolean _zoomable_check_rowid_visibility(dt_thumbtable_t *table, const int rowid)
+{
+  if(rowid < 1) return FALSE;
+  if(!table->list || g_list_length(table->list) == 0) return FALSE;
+
+  // is the needed rowid inside the list
+  // in this case, is it fully visible ?
+  GList *l = g_list_first(table->list);
+  int i = 0;
+  int y_move = 0;
+  int x_move = 0;
+  while(l)
+  {
+    dt_thumbnail_t *th = (dt_thumbnail_t *)l->data;
+    if(th->rowid == rowid)
+    {
+      // vertical movement
+      if(th->y < 0)
+        y_move = -th->y;
+      else if(th->y + table->thumb_size >= table->view_height)
+        y_move = table->view_height - th->y - table->thumb_size;
+      // horizontal movement
+      if(th->x < 0)
+        x_move = -th->x;
+      else if(th->x + table->thumb_size >= table->view_width)
+        x_move = table->view_width - th->x - table->thumb_size;
+      // if the thumb is fully visible, nothing to do !
+      if(x_move == 0 && y_move == 0) return TRUE;
+      break;
+    }
+    l = g_list_next(l);
+    i++;
+  }
+  return FALSE;
+}
+gboolean dt_thumbtable_check_imgid_visibility(dt_thumbtable_t *table, const int imgid)
+{
+  if(imgid < 1) return FALSE;
+  if(table->mode == DT_THUMBTABLE_MODE_FILEMANAGER)
+    return _filemanager_check_rowid_visibility(table, _thumb_get_rowid(imgid));
+  else if(table->mode == DT_THUMBTABLE_MODE_ZOOM)
+    return _zoomable_check_rowid_visibility(table, _thumb_get_rowid(imgid));
 
   return FALSE;
 }

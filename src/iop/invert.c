@@ -160,7 +160,7 @@ static void gui_update_from_coeffs(dt_iop_module_t *self)
   gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(g->colorpicker), &color);
 }
 
-void color_picker_apply(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece)
+void color_picker_apply(dt_iop_module_t *self, GtkWidget *picker, dt_dev_pixelpipe_iop_t *piece)
 {
   static float old[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
@@ -173,10 +173,9 @@ void color_picker_apply(dt_iop_module_t *self, dt_dev_pixelpipe_iop_t *piece)
   dt_iop_invert_params_t *p = self->params;
   for(int k = 0; k < 4; k++) p->color[k] = grayrgb[k];
 
-  const int reset = darktable.gui->reset;
-  darktable.gui->reset = 1;
+  ++darktable.gui->reset;
   gui_update_from_coeffs(self);
-  darktable.gui->reset = reset;
+  --darktable.gui->reset;
 
   dt_dev_add_history_item(darktable.develop, self, TRUE);
   dt_control_queue_redraw_widget(self->widget);

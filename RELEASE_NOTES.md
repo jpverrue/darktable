@@ -278,7 +278,31 @@ making a backup is strongly advised.
 
 ## Lua
 
+- API changed to 6.0.0 
 
+- facebook, flickr, and picasa removed from types.dt_imageio_storage_module_t.
+
+- piwigo added to type.dt_imageio_storage_module_t.
+
+- notes and version_name metadata fields added to types.dt_lua_image_t data type.
+
+- Added 4 new properties to dt_collection_properties_t, 
+  DT_COLLECTION_PROP_IMPORT_TIMESTAMP, DT_COLLECTION_PROP_CHANGE_TIMESTAMP,
+  DT_COLLECTION_PROP_EXPORT_TIMESTAMP, DT_COLLECTION_PROP_PRINT_TIMESTAMP
+
+- added darktable.gui.panel_get_size and darktable.gui.panel_set_size functions 
+  to set the width of the  left or right panels and the height of the bottom panel.
+
+- fixed is_password field of entry widget to work according to the API manual, so 
+  now when it is set to true the field is hidden.
+
+- Added function darktable.gui.views.lighttable.is_image_visible to check if an image 
+  is visible in lighttable view.
+
+- Added function darktable.gui.views.lighttable.set_image_visible to force an 
+  image to be visible in lighttable view.
+  
+>>>>>>> 1ae858b9d2efe2a746f00205b699719ffabc54db
 ## Changed Dependencies
 
 
